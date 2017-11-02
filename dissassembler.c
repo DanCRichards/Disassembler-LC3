@@ -1,5 +1,4 @@
 // Created by Daniel Richards
-// Copyright All Rights Reserved.// Comments: 
 // argv[1] input is a text file with hex codes on each line which represesnts an LC-3 Instruction
 // This program "dissassembles" the operations into LC-3 Assembly to be human readable by being printed out on the display. 
 
