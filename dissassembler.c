@@ -7,6 +7,7 @@
 // Then passes into opcodePrinterBit which prints the whole line. This function calls other functions based off of the code to represent different LC-3 Opcodes.
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
 
@@ -27,25 +28,31 @@ int main(int argc, char *argv[]){
 	FILE *input;
 	input = fopen(argv[1], "r");
 	unsigned int line;
+
 	if (argc == 3) { 
 
 		PC = strtol(argv[2], NULL, 16); // Sees if the hex value of an address is passed into the function and assigns it to the PC.
 
 	}
-	if(input == NULL){
+
+	if(!input){
+                /* Undefined behaviour, best thing to do here is exit */
 		printf("ERROR: \n");
 		printf("There was an error in opening the file. Ensure you have passed in the obj file as an argument to the program. \n");
+                exit(2);
+
 	}
 
 	while (fscanf(input, "%x", &line) != EOF){
 
-	PC = PC + 1;
+	PC += 1;
 
 	opcodePrinterBit(line);
 	 // Adds to the PC count, pretending that we're actually going through the memory in LC-3.
 
 	}
-fclose(input);
+
+        fclose(input);
 
 }// End of Main Function
 
@@ -60,7 +67,8 @@ bool nBitChecker(int n, unsigned int word){
 // This is the major printer of
 void operandsPrinter(unsigned int hex, char *opcode){
 
-	if (opcode == "and") {
+        /* man strcmp */
+	if (0 == strcmp("and", opcode)) {
 
 		if (nBitChecker(5, hex) == false) {
 			//Register Mode
@@ -81,7 +89,7 @@ void operandsPrinter(unsigned int hex, char *opcode){
 // #######################################################################
 
 
-	if (opcode == "add") {
+	if (0 == strcmp("add", opcode)) {
 		if (nBitChecker(5, hex) == false) {
 			//Register Mode
 			destinationRegister(hex);
@@ -101,7 +109,7 @@ void operandsPrinter(unsigned int hex, char *opcode){
 
 
 
-	if (opcode == "br") {
+	if (0 == strcmp(opcode, "br")) {
 		if (nBitChecker(11, hex) == true) {
 			printf("n");
 		}
@@ -128,9 +136,11 @@ void operandsPrinter(unsigned int hex, char *opcode){
 // #######################################################################
 
 
-	if (opcode ==  "jmp") {
+	if (strcmp(opcode, "jmp")){
 		statusRegister1(hex); // This also prints the register used for JMP. - Isn't LC-3 smart?
 	}// JMP 
+
+        /* Should have an else that gets executed */
 	
 	
 
@@ -240,13 +250,13 @@ void destinationRegister(unsigned int hex) {
 	int reg = 0;
 
 	if (nBitChecker(9, hex) == true) {
-		reg = reg + 1;
+		reg += 1;
 	}
 	if (nBitChecker(10, hex) == true) {
-		reg = reg + 2;
+		reg += 2;
 	}
 	if (nBitChecker(11, hex) == true) {
-		reg = reg + 4;
+		reg += 4;
 	}
 	printf("r%d,", reg);
 
@@ -256,14 +266,15 @@ void statusRegister1(unsigned int hex) {
 
 	int reg = 0;
 
-	if (nBitChecker(6, hex) == true) {
-		reg = reg + 1;
+        /* Refactor this so it can be a switch statement */
+	if(nBitChecker(6, hex)) {
+		reg += 1;
 	}
-	if (nBitChecker(7, hex) == true) {
-		reg = reg + 2;
+	if (nBitChecker(7, hex)){
+		reg += 2;
 	}
 	if (nBitChecker(8, hex) == true) {
-		reg = reg + 4;
+		reg += 4;
 	}
 	printf("r%d", reg);
 
@@ -272,14 +283,14 @@ void statusRegister1(unsigned int hex) {
 void statusRegister2(unsigned int hex) {
 	int reg = 0;
 
-	if (nBitChecker(0, hex) == true) {
-		reg = reg + 1;
+	if (nBitChecker(0, hex)) {
+		reg += 1;
 	}
-	if (nBitChecker(1, hex) == true) {
-		reg = reg + 2;
+	if (nBitChecker(1, hex)) {
+		reg += 2;
 	}
-	if (nBitChecker(2, hex) == true) {
-		reg = reg + 4;
+	if (nBitChecker(2, hex)) {
+		reg += 4;
 	}
 	printf(",r%d\n", reg);
 	
@@ -288,18 +299,24 @@ void statusRegister2(unsigned int hex) {
 void imm5Print(unsigned int hex){
 
 	 int reg = 0;
-	if (nBitChecker(4, hex) == false) {
-		if (nBitChecker(0, hex) == true) {
-			reg = reg + 1;
+        /* You would want a switch here else once you 
+         * trigger one statement it can fall through and
+         * check other values. This isn't a problem but it 
+         * forces extra computation */
+
+        /* :%s/reg = reg +/reg +=/g */
+	if (!nBitChecker(4, hex)) {
+		if (nBitChecker(0, hex)) {
+			reg += 1;
 		}
-		if (nBitChecker(1, hex) == true) {
-			reg = reg + 2;
+		if (nBitChecker(1, hex)) {
+			reg += 2;
 		}
-		if (nBitChecker(2, hex) == true) {
-			reg = reg + 4;
+		if (nBitChecker(2, hex)) {
+			reg += 4;
 		}
-		if (nBitChecker(3, hex) == true) {
-			reg = reg + 8;
+		if (nBitChecker(3, hex)) {
+			reg += 8;
 		}
 		
 		printf(",%d \n", reg);
@@ -307,19 +324,19 @@ void imm5Print(unsigned int hex){
 	else { // The value is a negative number. 
 
 		if (nBitChecker(0, hex) == false) {
-			reg = reg + 1;
+			reg += 1;
 		}
 		if (nBitChecker(1, hex) == false) {
-			reg = reg + 2;
+			reg += 2;
 		}
 		if (nBitChecker(2, hex) == false) {
-			reg = reg + 4;
+			reg += 4;
 		}
 		if (nBitChecker(3, hex) == false) {
-			reg = reg + 8;
+			reg += 8;
 		}
 		
-		reg = reg + 1;
+		reg += 1;
 		printf(",-%d \n", reg);
 
 
