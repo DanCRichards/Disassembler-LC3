@@ -1,6 +1,9 @@
-// Created by Daniel Richards
+// Created by Daniel Richards - June 2017
+// Aditional changes by Guy Nankivell - November 2017
+//
 // argv[1] input is a text file with hex codes on each line which represesnts an LC-3 Instruction
 // This program "dissassembles" the operations into LC-3 Assembly to be human readable by being printed out on the display. 
+// Note: Doesn't fully support all of LC-3 Assembly. 
 
 
 // Main iterates line by line through the file to read the hex. 
@@ -12,7 +15,7 @@
 #include <string.h>
 
 
-//FUNCTION AND GLOBAL VARIABLE DEFINITION
+//FUNCTION AND GLOBAL VARIABLE DECLARATION
 
 bool nBitChecker( int, unsigned int); // This function checks the Nth bit of a word passed into it. 
 void opcodePrinterBit(unsigned int); // This function prints the opcode for the hex value. i.e AND 
@@ -24,6 +27,7 @@ void imm5Print(unsigned int); // Prints the value used in immediate mode for AND
 void addressPrintPCOffset9(unsigned int); // Prints the value of an address with an off set of 9 bits. 
 unsigned int PC = 0;  // To be used as Global PC value for Part 4. Set to 0, so that if there is no passing in address it doesn't cause Runtime error. 
 
+// END OF FUNCTION / GLOBAL VARIABLE DECLARATION
 int main(int argc, char *argv[]){
 	FILE *input;
 	input = fopen(argv[1], "r");
@@ -46,9 +50,10 @@ int main(int argc, char *argv[]){
 	while (fscanf(input, "%x", &line) != EOF){
 
 	PC += 1;
+	// Adds to the PC count, pretending that we're actually going through the memory in LC-3.
 
 	opcodePrinterBit(line);
-	 // Adds to the PC count, pretending that we're actually going through the memory in LC-3.
+	 
 
 	}
 
@@ -64,10 +69,16 @@ bool nBitChecker(int n, unsigned int word){
 
 
 
-// This is the major printer of
+// This is the major printer of everything...
 void operandsPrinter(unsigned int hex, char *opcode){
+	
+	
+// #######################################################################
+
+//                         START OF AND
 
         /* man strcmp */
+
 	if (0 == strcmp("and", opcode)) {
 
 		if (nBitChecker(5, hex) == false) {
@@ -88,7 +99,9 @@ void operandsPrinter(unsigned int hex, char *opcode){
 
 // #######################################################################
 
-
+//                         START OF ADD
+	
+	
 	if (0 == strcmp("add", opcode)) {
 		if (nBitChecker(5, hex) == false) {
 			//Register Mode
@@ -107,7 +120,7 @@ void operandsPrinter(unsigned int hex, char *opcode){
 
 // #######################################################################
 
-
+//                         START OF BR
 
 	if (0 == strcmp(opcode, "br")) {
 		if (nBitChecker(11, hex) == true) {
@@ -135,6 +148,7 @@ void operandsPrinter(unsigned int hex, char *opcode){
 
 // #######################################################################
 
+//                         START OF JMP
 
 	if (strcmp(opcode, "jmp")){
 		statusRegister1(hex); // This also prints the register used for JMP. - Isn't LC-3 smart?
@@ -245,7 +259,7 @@ void opcodePrinterBit(unsigned int hex){
 }
 
 
-void destinationRegister(unsigned int hex) {
+void destinationRegister(unsigned int hex) { // Prints the destination register, apparently...
 
 	int reg = 0;
 
@@ -262,7 +276,7 @@ void destinationRegister(unsigned int hex) {
 
 }// End of destinationRegister
 
-void statusRegister1(unsigned int hex) {
+void statusRegister1(unsigned int hex) { // Prints the first StatusRegister1. Used for many a thing in LC-3
 
 	int reg = 0;
 
