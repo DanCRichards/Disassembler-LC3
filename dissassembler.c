@@ -43,7 +43,8 @@ int main(int argc, char *argv[]){
                 /* Undefined behaviour, best thing to do here is exit */
 		printf("ERROR: \n");
 		printf("There was an error in opening the file. Ensure you have passed in the obj file as an argument to the program. \n");
-                exit(2);
+                 fclose(input);
+		exit(2);
 
 	}
 
