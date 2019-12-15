@@ -1,360 +1,202 @@
-// Created by Daniel Richards - June 2017
-// Aditional changes by Guy Nankivell - November 2017
-//
-// argv[1] input is a text file with hex codes on each line which represesnts an LC-3 Instruction
-// This program "dissassembles" the operations into LC-3 Assembly to be human readable by being printed out on the display. 
-// Note: Doesn't fully support all of LC-3 Assembly. 
+/* LC3 Object file interpreter */
+
+/* This software complies to the Linux C style guide
+ * and is written to compile under ISO C Standard 99, 
+ * and definitely the best assignment you will see */
+
+/* Definitions */
+#define BUFFER_SIZE     10 
+#define EXIT_STATUS     1
+
+#define DEFAULT_ADDR    0x3000
+#define INSTR_MASK      0xF000
+
+/* Instruction masks for comparison */
+#define LC3_AND         0x5000
+#define LC3_ADD         0x1000
+#define LC3_IMM         0x20
+#define LC3_BR          0x0
+#define LC3_JMP         0xc000
+
+/* Branch masks */
+#define LC3_BR_N        0x800
+#define LC3_BR_Z        0x400
+#define LC3_BR_P        0x200
+#define LC3_BR_SIGN     0x100
+#define LC3_BR_OFF      0x1FF 
+
+/* AND/ADD masks */
+#define LC3_AND_DR      0xE00
+#define LC3_AND_SR1     0x1C0
+#define LC3_AND_SR2     0x7
+#define LC3_IMMEAD      0x1F
+#define LC3_IMMEAD_S    0x10
 
 
-// Main iterates line by line through the file to read the hex. 
-// Then passes into opcodePrinterBit which prints the whole line. This function calls other functions based off of the code to represent different LC-3 Opcodes.
+/* This structure is necessary such that we can
+ * define our binary in such a way that the address
+ * associated is inherent to the instruction */
+typedef struct {
+        int32_t integer; 
+        int64_t addr; /* This is the .ORIG address */
+} binary, *binptr;
+
+
+/* Function Prototypes */
+int64_t twoComplement(binptr instr, int64_t mask, int64_t sign);
+void readInstructions(FILE *file, int64_t address);
+void printOperators(binptr instr, int jump);
+int main(int argc, char **argv);
+void printBranch(binptr instr);
+void printInstr(binptr instr);
+
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
-#include <string.h>
+#include <stdint.h>
 
 
-//FUNCTION AND GLOBAL VARIABLE DECLARATION
+int main(int argc, char **argv)
+{
+        char *filename; int64_t addr; FILE *file;
+        
+        if(argc < 2 || argc > 3){
+                printf("Usage: %s [FILE] [ADDRESS]\n", *argv);
+                return EXIT_STATUS;
+        }
 
-bool nBitChecker( int, unsigned int); // This function checks the Nth bit of a word passed into it. 
-void opcodePrinterBit(unsigned int); // This function prints the opcode for the hex value. i.e AND 
-void operandsPrinter(unsigned int, char[4]); // This is the function which controls how DR,SR1, SR2 etc are printed
-void destinationRegister(unsigned int); // Prints the destination register
-void statusRegister1(unsigned int); // Prints the Status Register 1
-void statusRegister2(unsigned int); // Prints the Status Register 2
-void imm5Print(unsigned int); // Prints the value used in immediate mode for AND / ADD
-void addressPrintPCOffset9(unsigned int); // Prints the value of an address with an off set of 9 bits. 
-unsigned int PC = 0;  // To be used as Global PC value for Part 4. Set to 0, so that if there is no passing in address it doesn't cause Runtime error. 
+        filename = *(argv + 1);
+        addr = (argc == 3) ? strtol(*(argv + 2), NULL, 16) : DEFAULT_ADDR;
 
-// END OF FUNCTION / GLOBAL VARIABLE DECLARATION
-int main(int argc, char *argv[]){
-	FILE *input;
-	input = fopen(argv[1], "r");
-	unsigned int line;
+        if(! (file = fopen(filename, "r")) ){
+                printf("Invalid file\n");
+                return EXIT_STATUS;
+        }
 
-	if (argc == 3) { 
+        readInstructions(file, addr);
 
-		PC = strtol(argv[2], NULL, 16); // Sees if the hex value of an address is passed into the function and assigns it to the PC.
+        fclose(file);
 
-	}
-
-	if(!input){
-                /* Undefined behaviour, best thing to do here is exit */
-		printf("ERROR: \n");
-		printf("There was an error in opening the file. Ensure you have passed in the obj file as an argument to the program. \n");
-                 fclose(input);
-		exit(2);
-
-	}
-
-	while (fscanf(input, "%x", &line) != EOF){
-
-	PC += 1;
-	// Adds to the PC count, pretending that we're actually going through the memory in LC-3.
-
-	opcodePrinterBit(line);
-	 
-
-	}
-
-        fclose(input);
-
-}// End of Main Function
-
-
-bool nBitChecker(int n, unsigned int word){
-	return (1 & (word >> n));
+        return 0;
 }
 
 
+/* As the instructions are terminated by \n;
+ * this makes fgets the perfect utility to parse
+ * our LC-3 arguments. Will terminate when NULL */
+void readInstructions(FILE *file, int64_t address)
+{
+        binary instr; int32_t hex;
 
+        hex = 0;
 
-// This is the major printer of everything...
-void operandsPrinter(unsigned int hex, char *opcode){
-	
-	
-// #######################################################################
-
-//                         START OF AND
-
-        /* man strcmp */
-
-	if (0 == strcmp("and", opcode)) {
-
-		if (nBitChecker(5, hex) == false) {
-			//Register Mode
-			destinationRegister(hex);
-			statusRegister1(hex);
-			statusRegister2(hex);
-		}
-		else {
-			destinationRegister(hex);
-			statusRegister1(hex);
-			imm5Print(hex);
-		} // in IMMU mode. For later dev
-
-
-	} // END OF AND
-
-
-// #######################################################################
-
-//                         START OF ADD
-	
-	
-	if (0 == strcmp("add", opcode)) {
-		if (nBitChecker(5, hex) == false) {
-			//Register Mode
-			destinationRegister(hex);
-			statusRegister1(hex);
-			statusRegister2(hex);
-		}
-		else { // The opcode uses Imm5
-			destinationRegister(hex);
-			statusRegister1(hex);
-			imm5Print(hex);
-		} // End of IMM5 mode
-
-	}// END OF ADD
-
-
-// #######################################################################
-
-//                         START OF BR
-
-	if (0 == strcmp(opcode, "br")) {
-		if (nBitChecker(11, hex) == true) {
-			printf("n");
-		}
-
-		if (nBitChecker(10, hex) == true) {
-			printf("z");
-		}
-
-		if (nBitChecker(9, hex) == true) {
-			printf("p");
-		}
-
-		printf(" "); // Prints a space? 
-
-
-		addressPrintPCOffset9(hex);
-
-
-
-
-	}// END OF BR
-
-
-// #######################################################################
-
-//                         START OF JMP
-
-	if (strcmp(opcode, "jmp")){
-		statusRegister1(hex); // This also prints the register used for JMP. - Isn't LC-3 smart?
-	}// JMP 
-
-        /* Should have an else that gets executed */
-	
-	
-
-
-}
-
-void addressPrintPCOffset9(unsigned int hex) {
-	int offSet = 0;
-	if (nBitChecker(8, hex) == false) {
-		if (nBitChecker(0, hex) == true) {
-			offSet = offSet + 1;
-		}
-		if (nBitChecker(1, hex) == true) {
-			offSet = offSet + 2;
-		}
-		if (nBitChecker(2, hex) == true) {
-			offSet = offSet + 4;
-		}
-		if (nBitChecker(3, hex) == true) {
-			offSet = offSet + 8;
-		}
-		if (nBitChecker(4, hex) == true) {
-			offSet = offSet + 16;
-		}
-		if (nBitChecker(5, hex) == true) {
-			offSet = offSet + 32;
-		}
-		if (nBitChecker(6, hex) == true) {
-			offSet = offSet + 64;
-		}
-		if (nBitChecker(7, hex) == true) {
-			offSet = offSet + 128;
-		}
-		
-	
-	}
-	if (nBitChecker(8, hex) == true) { // The value is a negative number. 
-
-		if (nBitChecker(0, hex) == false) {
-			offSet = offSet + 1;
-		}
-		if (nBitChecker(1, hex) == false) {
-			offSet = offSet + 2;
-		}
-		if (nBitChecker(2, hex) == false) {
-			offSet = offSet + 4;
-		}
-		if (nBitChecker(3, hex) == false) {
-			offSet = offSet + 8;
-		}
-		if (nBitChecker(4, hex) == false) {
-			offSet = offSet + 16;
-		}
-		if (nBitChecker(5, hex) == false) {
-			offSet = offSet + 32;
-		}
-		if (nBitChecker(6, hex) == false) {
-			offSet = offSet + 64;
-		}
-		if (nBitChecker(7, hex) == false) {
-			offSet = offSet + 128;
-		}
-		offSet = offSet + 1;
-		offSet = offSet * -1;
-		
-
-	}
-
-	int tempPC = PC;
-	tempPC = tempPC + offSet;
-	printf("0x%x", tempPC);
-	// Might want to put the PC + offset here and printing here. 
+        /* Address must be incremented for PC */
+        
+        for(address++; fscanf(file, "%x\n", &hex) > 0; address++){
+                instr.addr = address;
+                instr.integer = hex;
+                printInstr(&instr);
+        }
 
 }
 
 
-// OpCodePrinterBit - This Prints the op code of the hex value in the file. Gets called from main();
-void opcodePrinterBit(unsigned int hex){
+/* Determines what instruction it is by isolating the 
+ * instruction code, then tests against known codes.
+ * It then prints the instruction and then passes the obj 
+ * to another function to print the associated arguments */
+void printInstr(binptr instr)
+{
+        switch(instr->integer & INSTR_MASK){
 
-	if((nBitChecker(15,hex) == false) & (nBitChecker(14,hex) == false) & (nBitChecker(13,hex) == false) & (nBitChecker(12,hex) == true)){
-		printf("add ");
-		operandsPrinter(hex, "add");
-	} // END OF ADD
+                case LC3_AND:
+                        printf("AND ");
+                        printOperators(instr, 0);
+                        break;
 
-	if((nBitChecker(15,hex) == false) & (nBitChecker(14,hex) == true) & (nBitChecker(13,hex) == false) & (nBitChecker(12,hex) == true)){
-		printf("and ");
-		operandsPrinter(hex, "and" );
-	} // END OF AND
+                case LC3_ADD:
+                        printf("ADD ");
+                        printOperators(instr, 0);
+                        break;
 
-	if((nBitChecker(15,hex) == false) & (nBitChecker(14,hex) == false) & (nBitChecker(13,hex) == false) & (nBitChecker(12,hex) == false)){
-		printf("br", hex);
-		operandsPrinter(hex, "br");
-		printf("\n"); 
-	} // END OF BR
+                case LC3_JMP:
+                        printf("JMP ");
+                        printOperators(instr, 1);
+                        break;
 
-	if((nBitChecker(15,hex) == true) & (nBitChecker(14,hex) == true) & (nBitChecker(13,hex) == false) & (nBitChecker(12,hex) == false)){
-		printf("jmp ", hex);
-		operandsPrinter(hex, "jmp");
-		printf("\n"); // Because JMP uses code for SR1 Print function, you need to have \n at the end to go to a new line.
-	} // END OF JMP
+                case LC3_BR:
+                        printBranch(instr);
+                        break;
+
+                /* This is just in case they throw us some
+                 * shit I haven't taken into account */
+                default:
+                        printf("%c", '\0');
+        }
+
+}
+
+
+/* This handles printing for pretty much everything
+ * with DR AND SR1 and SR2 slots in memory. There
+ * is a argument for `jump` which is a flag that
+ * prints jump instructions */
+void printOperators(binptr instr, int jump)
+{
+        int64_t dr, sr1, sr2;
+
+        dr = (instr->integer & LC3_AND_DR) >> 9;
+        sr1 = (instr->integer & LC3_AND_SR1) >> 6;
+
+        if(jump){
+                printf("r%li\n", sr1);
+                return;
+        }
+
+        /* If the instruction is AND/ADD && Immeadiate */
+        if(instr->integer & LC3_IMM){
+                sr2 = twoComplement(instr, LC3_IMMEAD, LC3_IMMEAD_S);
+                printf("r%li, r%li, #%li\n", dr, sr1, sr2);
+                return;
+
+        } else {
+
+                sr2 = instr->integer & LC3_AND_SR2;
+                printf("r%li, r%li, r%li\n", dr, sr1, sr2);
+        }
 
 }
 
 
-void destinationRegister(unsigned int hex) { // Prints the destination register, apparently...
+/* Need to pass in the starting memory address */
+void printBranch(binptr instr)
+{
+        int64_t orig, offset; char n, z, p;
 
-	int reg = 0;
+        orig =  instr->addr;
 
-	if (nBitChecker(9, hex) == true) {
-		reg += 1;
-	}
-	if (nBitChecker(10, hex) == true) {
-		reg += 2;
-	}
-	if (nBitChecker(11, hex) == true) {
-		reg += 4;
-	}
-	printf("r%d,", reg);
+        n = (instr->integer & LC3_BR_N) ? 'n' : '\0';
+        z = (instr->integer & LC3_BR_Z) ? 'z' : '\0';
+        p = (instr->integer & LC3_BR_P) ? 'p' : '\0';
 
-}// End of destinationRegister
+        offset = twoComplement(instr, LC3_BR_OFF, LC3_BR_SIGN) + orig;
 
-void statusRegister1(unsigned int hex) { // Prints the first StatusRegister1. Used for many a thing in LC-3
-
-	int reg = 0;
-
-        /* Refactor this so it can be a switch statement */
-	if(nBitChecker(6, hex)) {
-		reg += 1;
-	}
-	if (nBitChecker(7, hex)){
-		reg += 2;
-	}
-	if (nBitChecker(8, hex) == true) {
-		reg += 4;
-	}
-	printf("r%d", reg);
+        printf("BR%c%c%c 0x%lx\n", n, z, p, offset);
 
 }
 
-void statusRegister2(unsigned int hex) {
-	int reg = 0;
 
-	if (nBitChecker(0, hex)) {
-		reg += 1;
-	}
-	if (nBitChecker(1, hex)) {
-		reg += 2;
-	}
-	if (nBitChecker(2, hex)) {
-		reg += 4;
-	}
-	printf(",r%d\n", reg);
-	
+/* This returns an integer representation of the number that gets passed
+ * in depending on whether it is signed in the first place. The mask is 
+ * an integer which represents what part of the number you want to have
+ * addressed. The sign is merely a bit mask which shows if it is signed. */
+int64_t twoComplement(binptr instr, int64_t mask, int64_t sign)
+{
+        /* If signed */
+        if(instr->integer & sign){
+                return -((~instr->integer + 1) & mask);
+        }
+
+        return instr->integer & mask;
 }
 
-void imm5Print(unsigned int hex){
-
-	 int reg = 0;
-        /* You would want a switch here else once you 
-         * trigger one statement it can fall through and
-         * check other values. This isn't a problem but it 
-         * forces extra computation */
-
-        /* :%s/reg = reg +/reg +=/g */
-	if (!nBitChecker(4, hex)) {
-		if (nBitChecker(0, hex)) {
-			reg += 1;
-		}
-		if (nBitChecker(1, hex)) {
-			reg += 2;
-		}
-		if (nBitChecker(2, hex)) {
-			reg += 4;
-		}
-		if (nBitChecker(3, hex)) {
-			reg += 8;
-		}
-		
-		printf(",%d \n", reg);
-	}
-	else { // The value is a negative number. 
-
-		if (nBitChecker(0, hex) == false) {
-			reg += 1;
-		}
-		if (nBitChecker(1, hex) == false) {
-			reg += 2;
-		}
-		if (nBitChecker(2, hex) == false) {
-			reg += 4;
-		}
-		if (nBitChecker(3, hex) == false) {
-			reg += 8;
-		}
-		
-		reg += 1;
-		printf(",-%d \n", reg);
-
-
-	}
-
-}
